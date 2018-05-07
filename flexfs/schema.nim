@@ -6,7 +6,7 @@ import reactor, caprpc, caprpc/rpcgensupport
 type
   Attrs* = ref object
     ino*: uint64
-    siz*: uint64
+    size*: uint64
     blocks*: uint64
     atime*: uint64
     mtime*: uint64
@@ -36,7 +36,7 @@ type
     pid*: uint32
 
   Error* = ref object
-    errno*: uint32
+    errorCode*: uint32
 
   SetAttrFlags* = ref object
     setMode*: bool
@@ -55,6 +55,7 @@ type
     sync*: bool
     trunc*: bool
     mode*: uint32
+    excl*: bool
 
   Node* = distinct Interface
   Node_CallWrapper* = ref object of CapServerWrapper
@@ -65,6 +66,8 @@ type
 
   Node_lookup_Result* = ref object
     error*: Error
+    node*: Node
+    stat*: Attrs
 
   Node_getAttr_Params* = ref object
     cred*: Cred
@@ -142,12 +145,12 @@ type
     error*: Error
     handle*: FileHandle
 
-  Node_opendir_Params* = ref object
+  Node_readdir_Params* = ref object
     cred*: Cred
 
-  Node_opendir_Result* = ref object
+  Node_readdir_Result* = ref object
     error*: Error
-    handle*: FileHandle
+    entries*: seq[DirEntry]
 
   Node_statfs_Params* = ref object
     cred*: Cred
@@ -192,27 +195,43 @@ type
   FileHandle_CallWrapper* = ref object of CapServerWrapper
 
   FileHandle_read_Params* = ref object
+    cred*: Cred
+    offset*: uint64
+    size*: uint64
 
   FileHandle_read_Result* = ref object
+    error*: Error
     data*: string
 
   FileHandle_write_Params* = ref object
+    cred*: Cred
+    offset*: uint64
+    data*: string
 
   FileHandle_write_Result* = ref object
+    error*: Error
 
   FileHandle_fsync_Params* = ref object
+    cred*: Cred
 
   FileHandle_fsync_Result* = ref object
+    error*: Error
 
   FileHandle_flush_Params* = ref object
+    cred*: Cred
 
   FileHandle_flush_Result* = ref object
+    error*: Error
+
+  DirEntry* = ref object
+    name*: string
+    kind*: uint8
 
 
 
 makeStructCoders(Attrs, [
   (ino, 0, 0, true),
-  (siz, 8, 0, true),
+  (size, 8, 0, true),
   (blocks, 16, 0, true),
   (atime, 24, 0, true),
   (mtime, 32, 0, true),
@@ -245,7 +264,7 @@ makeStructCoders(Cred, [
   ], [], [])
 
 makeStructCoders(Error, [
-  (errno, 0, 0, true)
+  (errorCode, 0, 0, true)
   ], [], [])
 
 makeStructCoders(SetAttrFlags, [], [], [
@@ -266,12 +285,13 @@ makeStructCoders(OpenFlags, [
   (readable, 4, false, true),
   (writable, 5, false, true),
   (sync, 6, false, true),
-  (trunc, 7, false, true)
+  (trunc, 7, false, true),
+  (excl, 8, false, true)
   ])
 
 interfaceMethods Node:
   toCapServer(): CapServer
-  lookup(cred: Cred, name: string): Future[Error]
+  lookup(cred: Cred, name: string): Future[Node_lookup_Result]
   getAttr(cred: Cred): Future[Node_getAttr_Result]
   setAttr(cred: Cred, flags: SetAttrFlags, attr: Attrs): Future[Error]
   readlink(cred: Cred): Future[Node_readlink_Result]
@@ -283,7 +303,7 @@ interfaceMethods Node:
   rename(cred: Cred, targetDir: Node, newName: string): Future[Error]
   link(cred: Cred, targetDir: Node, newName: string): Future[Error]
   open(cred: Cred, openFlags: OpenFlags): Future[Node_open_Result]
-  opendir(cred: Cred): Future[Node_opendir_Result]
+  readdir(cred: Cred): Future[Node_readdir_Result]
   statfs(cred: Cred): Future[Node_statfs_Result]
   setxattr(): Future[Error]
   getxattr(): Future[Error]
@@ -292,7 +312,7 @@ interfaceMethods Node:
   access(cred: Cred): Future[Error]
   create(cred: Cred): Future[Error]
 
-proc lookup*(selfFut: Future[Node], cred: Cred, name: string): Future[Error] =
+proc lookup*(selfFut: Future[Node], cred: Cred, name: string): Future[Node_lookup_Result] =
   return selfFut.then((selfV) => selfV.lookup(cred, name))
 proc getAttr*(selfFut: Future[Node], cred: Cred): Future[Node_getAttr_Result] =
   return selfFut.then((selfV) => selfV.getAttr(cred))
@@ -316,8 +336,8 @@ proc link*(selfFut: Future[Node], cred: Cred, targetDir: Node, newName: string):
   return selfFut.then((selfV) => selfV.link(cred, targetDir, newName))
 proc open*(selfFut: Future[Node], cred: Cred, openFlags: OpenFlags): Future[Node_open_Result] =
   return selfFut.then((selfV) => selfV.open(cred, openFlags))
-proc opendir*(selfFut: Future[Node], cred: Cred): Future[Node_opendir_Result] =
-  return selfFut.then((selfV) => selfV.opendir(cred))
+proc readdir*(selfFut: Future[Node], cred: Cred): Future[Node_readdir_Result] =
+  return selfFut.then((selfV) => selfV.readdir(cred))
 proc statfs*(selfFut: Future[Node], cred: Cred): Future[Node_statfs_Result] =
   return selfFut.then((selfV) => selfV.statfs(cred))
 proc setxattr*(selfFut: Future[Node], ): Future[Error] =
@@ -336,7 +356,7 @@ proc create*(selfFut: Future[Node], cred: Cred): Future[Error] =
 proc getInterfaceId*(t: typedesc[Node]): uint64 = return 17595006542357360554'u64
 
 template forwardDecl*(iftype: typedesc[Node], self, impltype): untyped {.dirty.} =
-  proc lookup(self: impltype, cred: Cred, name: string): Future[Error] {.async.}
+  proc lookup(self: impltype, cred: Cred, name: string): Future[Node_lookup_Result] {.async.}
   proc getAttr(self: impltype, cred: Cred): Future[Node_getAttr_Result] {.async.}
   proc setAttr(self: impltype, cred: Cred, flags: SetAttrFlags, attr: Attrs): Future[Error] {.async.}
   proc readlink(self: impltype, cred: Cred): Future[Node_readlink_Result] {.async.}
@@ -348,7 +368,7 @@ template forwardDecl*(iftype: typedesc[Node], self, impltype): untyped {.dirty.}
   proc rename(self: impltype, cred: Cred, targetDir: Node, newName: string): Future[Error] {.async.}
   proc link(self: impltype, cred: Cred, targetDir: Node, newName: string): Future[Error] {.async.}
   proc open(self: impltype, cred: Cred, openFlags: OpenFlags): Future[Node_open_Result] {.async.}
-  proc opendir(self: impltype, cred: Cred): Future[Node_opendir_Result] {.async.}
+  proc readdir(self: impltype, cred: Cred): Future[Node_readdir_Result] {.async.}
   proc statfs(self: impltype, cred: Cred): Future[Node_statfs_Result] {.async.}
   proc setxattr(self: impltype, ): Future[Error] {.async.}
   proc getxattr(self: impltype, ): Future[Error] {.async.}
@@ -364,7 +384,7 @@ proc capCall*[T: Node](cap: T, id: uint64, args: AnyPointer): Future[AnyPointer]
     of 0:
       let argObj = args.castAs(Node_lookup_Params)
       let retVal = cap.lookup(argObj.cred, argObj.name)
-      return wrapFutureInSinglePointer(Node_lookup_Result, error, retVal)
+      return retVal.toAnyPointerFuture
     of 1:
       let argObj = args.castAs(Node_getAttr_Params)
       let retVal = cap.getAttr(argObj.cred)
@@ -410,8 +430,8 @@ proc capCall*[T: Node](cap: T, id: uint64, args: AnyPointer): Future[AnyPointer]
       let retVal = cap.open(argObj.cred, argObj.openFlags)
       return retVal.toAnyPointerFuture
     of 12:
-      let argObj = args.castAs(Node_opendir_Params)
-      let retVal = cap.opendir(argObj.cred)
+      let argObj = args.castAs(Node_readdir_Params)
+      let retVal = cap.readdir(argObj.cred)
       return retVal.toAnyPointerFuture
     of 13:
       let argObj = args.castAs(Node_statfs_Params)
@@ -445,8 +465,8 @@ proc capCall*[T: Node](cap: T, id: uint64, args: AnyPointer): Future[AnyPointer]
 
 proc getMethodId*(t: typedesc[Node_lookup_Params]): uint64 = 0'u64
 
-proc lookup*[T: Node_CallWrapper](self: T, cred: Cred, name: string): Future[Error] =
-  return getFutureField(self.cap.call(17595006542357360554'u64, 0, toAnyPointer(Node_lookup_Params(cred: cred, name: name))).castAs(Node_lookup_Result), error)
+proc lookup*[T: Node_CallWrapper](self: T, cred: Cred, name: string): Future[Node_lookup_Result] =
+  return self.cap.call(17595006542357360554'u64, 0, toAnyPointer(Node_lookup_Params(cred: cred, name: name))).castAs(Node_lookup_Result)
 
 proc getMethodId*(t: typedesc[Node_getAttr_Params]): uint64 = 1'u64
 
@@ -503,10 +523,10 @@ proc getMethodId*(t: typedesc[Node_open_Params]): uint64 = 11'u64
 proc open*[T: Node_CallWrapper](self: T, cred: Cred, openFlags: OpenFlags): Future[Node_open_Result] =
   return self.cap.call(17595006542357360554'u64, 11, toAnyPointer(Node_open_Params(cred: cred, openFlags: openFlags))).castAs(Node_open_Result)
 
-proc getMethodId*(t: typedesc[Node_opendir_Params]): uint64 = 12'u64
+proc getMethodId*(t: typedesc[Node_readdir_Params]): uint64 = 12'u64
 
-proc opendir*[T: Node_CallWrapper](self: T, cred: Cred): Future[Node_opendir_Result] =
-  return self.cap.call(17595006542357360554'u64, 12, toAnyPointer(Node_opendir_Params(cred: cred))).castAs(Node_opendir_Result)
+proc readdir*[T: Node_CallWrapper](self: T, cred: Cred): Future[Node_readdir_Result] =
+  return self.cap.call(17595006542357360554'u64, 12, toAnyPointer(Node_readdir_Params(cred: cred))).castAs(Node_readdir_Result)
 
 proc getMethodId*(t: typedesc[Node_statfs_Params]): uint64 = 13'u64
 
@@ -549,7 +569,9 @@ makeStructCoders(Node_lookup_Params, [], [
   ], [])
 
 makeStructCoders(Node_lookup_Result, [], [
-  (error, 0, PointerFlag.none, true)
+  (error, 0, PointerFlag.none, true),
+  (node, 1, PointerFlag.none, true),
+  (stat, 2, PointerFlag.none, true)
   ], [])
 
 makeStructCoders(Node_getAttr_Params, [], [
@@ -650,13 +672,13 @@ makeStructCoders(Node_open_Result, [], [
   (handle, 1, PointerFlag.none, true)
   ], [])
 
-makeStructCoders(Node_opendir_Params, [], [
+makeStructCoders(Node_readdir_Params, [], [
   (cred, 0, PointerFlag.none, true)
   ], [])
 
-makeStructCoders(Node_opendir_Result, [], [
+makeStructCoders(Node_readdir_Result, [], [
   (error, 0, PointerFlag.none, true),
-  (handle, 1, PointerFlag.none, true)
+  (entries, 1, PointerFlag.none, true)
   ], [])
 
 makeStructCoders(Node_statfs_Params, [], [
@@ -710,27 +732,27 @@ makeStructCoders(Node_create_Result, [], [
 
 interfaceMethods FileHandle:
   toCapServer(): CapServer
-  read(): Future[string]
-  write(): Future[void]
-  fsync(): Future[void]
-  flush(): Future[void]
+  read(cred: Cred, offset: uint64, size: uint64): Future[FileHandle_read_Result]
+  write(cred: Cred, offset: uint64, data: string): Future[Error]
+  fsync(cred: Cred): Future[Error]
+  flush(cred: Cred): Future[Error]
 
-proc read*(selfFut: Future[FileHandle], ): Future[string] =
-  return selfFut.then((selfV) => selfV.read())
-proc write*(selfFut: Future[FileHandle], ): Future[void] =
-  return selfFut.then((selfV) => selfV.write())
-proc fsync*(selfFut: Future[FileHandle], ): Future[void] =
-  return selfFut.then((selfV) => selfV.fsync())
-proc flush*(selfFut: Future[FileHandle], ): Future[void] =
-  return selfFut.then((selfV) => selfV.flush())
+proc read*(selfFut: Future[FileHandle], cred: Cred, offset: uint64, size: uint64): Future[FileHandle_read_Result] =
+  return selfFut.then((selfV) => selfV.read(cred, offset, size))
+proc write*(selfFut: Future[FileHandle], cred: Cred, offset: uint64, data: string): Future[Error] =
+  return selfFut.then((selfV) => selfV.write(cred, offset, data))
+proc fsync*(selfFut: Future[FileHandle], cred: Cred): Future[Error] =
+  return selfFut.then((selfV) => selfV.fsync(cred))
+proc flush*(selfFut: Future[FileHandle], cred: Cred): Future[Error] =
+  return selfFut.then((selfV) => selfV.flush(cred))
 
 proc getInterfaceId*(t: typedesc[FileHandle]): uint64 = return 14767779304721956413'u64
 
 template forwardDecl*(iftype: typedesc[FileHandle], self, impltype): untyped {.dirty.} =
-  proc read(self: impltype, ): Future[string] {.async.}
-  proc write(self: impltype, ): Future[void] {.async.}
-  proc fsync(self: impltype, ): Future[void] {.async.}
-  proc flush(self: impltype, ): Future[void] {.async.}
+  proc read(self: impltype, cred: Cred, offset: uint64, size: uint64): Future[FileHandle_read_Result] {.async.}
+  proc write(self: impltype, cred: Cred, offset: uint64, data: string): Future[Error] {.async.}
+  proc fsync(self: impltype, cred: Cred): Future[Error] {.async.}
+  proc flush(self: impltype, cred: Cred): Future[Error] {.async.}
 
 miscCapMethods(FileHandle, FileHandle_CallWrapper)
 
@@ -738,58 +760,85 @@ proc capCall*[T: FileHandle](cap: T, id: uint64, args: AnyPointer): Future[AnyPo
   case int(id):
     of 0:
       let argObj = args.castAs(FileHandle_read_Params)
-      let retVal = cap.read()
-      return wrapFutureInSinglePointer(FileHandle_read_Result, data, retVal)
+      let retVal = cap.read(argObj.cred, argObj.offset, argObj.size)
+      return retVal.toAnyPointerFuture
     of 1:
       let argObj = args.castAs(FileHandle_write_Params)
-      let retVal = cap.write()
-      return retVal.then(() => FileHandle_write_Result().toAnyPointer)
+      let retVal = cap.write(argObj.cred, argObj.offset, argObj.data)
+      return wrapFutureInSinglePointer(FileHandle_write_Result, error, retVal)
     of 2:
       let argObj = args.castAs(FileHandle_fsync_Params)
-      let retVal = cap.fsync()
-      return retVal.then(() => FileHandle_fsync_Result().toAnyPointer)
+      let retVal = cap.fsync(argObj.cred)
+      return wrapFutureInSinglePointer(FileHandle_fsync_Result, error, retVal)
     of 3:
       let argObj = args.castAs(FileHandle_flush_Params)
-      let retVal = cap.flush()
-      return retVal.then(() => FileHandle_flush_Result().toAnyPointer)
+      let retVal = cap.flush(argObj.cred)
+      return wrapFutureInSinglePointer(FileHandle_flush_Result, error, retVal)
     else: raise newException(NotImplementedError, "not implemented")
 
 proc getMethodId*(t: typedesc[FileHandle_read_Params]): uint64 = 0'u64
 
-proc read*[T: FileHandle_CallWrapper](self: T, ): Future[string] =
-  return getFutureField(self.cap.call(14767779304721956413'u64, 0, toAnyPointer(FileHandle_read_Params())).castAs(FileHandle_read_Result), data)
+proc read*[T: FileHandle_CallWrapper](self: T, cred: Cred, offset: uint64, size: uint64): Future[FileHandle_read_Result] =
+  return self.cap.call(14767779304721956413'u64, 0, toAnyPointer(FileHandle_read_Params(cred: cred, offset: offset, size: size))).castAs(FileHandle_read_Result)
 
 proc getMethodId*(t: typedesc[FileHandle_write_Params]): uint64 = 1'u64
 
-proc write*[T: FileHandle_CallWrapper](self: T, ): Future[void] =
-  return self.cap.call(14767779304721956413'u64, 1, toAnyPointer(FileHandle_write_Params())).castAs(FileHandle_write_Result).ignoreResultValue
+proc write*[T: FileHandle_CallWrapper](self: T, cred: Cred, offset: uint64, data: string): Future[Error] =
+  return getFutureField(self.cap.call(14767779304721956413'u64, 1, toAnyPointer(FileHandle_write_Params(cred: cred, offset: offset, data: data))).castAs(FileHandle_write_Result), error)
 
 proc getMethodId*(t: typedesc[FileHandle_fsync_Params]): uint64 = 2'u64
 
-proc fsync*[T: FileHandle_CallWrapper](self: T, ): Future[void] =
-  return self.cap.call(14767779304721956413'u64, 2, toAnyPointer(FileHandle_fsync_Params())).castAs(FileHandle_fsync_Result).ignoreResultValue
+proc fsync*[T: FileHandle_CallWrapper](self: T, cred: Cred): Future[Error] =
+  return getFutureField(self.cap.call(14767779304721956413'u64, 2, toAnyPointer(FileHandle_fsync_Params(cred: cred))).castAs(FileHandle_fsync_Result), error)
 
 proc getMethodId*(t: typedesc[FileHandle_flush_Params]): uint64 = 3'u64
 
-proc flush*[T: FileHandle_CallWrapper](self: T, ): Future[void] =
-  return self.cap.call(14767779304721956413'u64, 3, toAnyPointer(FileHandle_flush_Params())).castAs(FileHandle_flush_Result).ignoreResultValue
+proc flush*[T: FileHandle_CallWrapper](self: T, cred: Cred): Future[Error] =
+  return getFutureField(self.cap.call(14767779304721956413'u64, 3, toAnyPointer(FileHandle_flush_Params(cred: cred))).castAs(FileHandle_flush_Result), error)
 
-makeStructCoders(FileHandle_read_Params, [], [], [])
-
-makeStructCoders(FileHandle_read_Result, [], [
-  (data, 0, PointerFlag.none, true)
+makeStructCoders(FileHandle_read_Params, [
+  (offset, 0, 0, true),
+  (size, 8, 0, true)
+  ], [
+  (cred, 0, PointerFlag.none, true)
   ], [])
 
-makeStructCoders(FileHandle_write_Params, [], [], [])
+makeStructCoders(FileHandle_read_Result, [], [
+  (error, 0, PointerFlag.none, true),
+  (data, 1, PointerFlag.none, true)
+  ], [])
 
-makeStructCoders(FileHandle_write_Result, [], [], [])
+makeStructCoders(FileHandle_write_Params, [
+  (offset, 0, 0, true)
+  ], [
+  (cred, 0, PointerFlag.none, true),
+  (data, 1, PointerFlag.none, true)
+  ], [])
 
-makeStructCoders(FileHandle_fsync_Params, [], [], [])
+makeStructCoders(FileHandle_write_Result, [], [
+  (error, 0, PointerFlag.none, true)
+  ], [])
 
-makeStructCoders(FileHandle_fsync_Result, [], [], [])
+makeStructCoders(FileHandle_fsync_Params, [], [
+  (cred, 0, PointerFlag.none, true)
+  ], [])
 
-makeStructCoders(FileHandle_flush_Params, [], [], [])
+makeStructCoders(FileHandle_fsync_Result, [], [
+  (error, 0, PointerFlag.none, true)
+  ], [])
 
-makeStructCoders(FileHandle_flush_Result, [], [], [])
+makeStructCoders(FileHandle_flush_Params, [], [
+  (cred, 0, PointerFlag.none, true)
+  ], [])
+
+makeStructCoders(FileHandle_flush_Result, [], [
+  (error, 0, PointerFlag.none, true)
+  ], [])
+
+makeStructCoders(DirEntry, [
+  (kind, 0, 0, true)
+  ], [
+  (name, 0, PointerFlag.text, true)
+  ], [])
 
 

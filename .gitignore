@@ -1,2 +1,4 @@
 /nimenv.local
 /nim.cfg
+nimcache/
+flexfs/server

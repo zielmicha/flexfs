@@ -2,7 +2,7 @@
 
 struct Attrs {
    ino @0 :UInt64;
-   siz @1 :UInt64;
+   size @1 :UInt64;
    blocks @2 :UInt64;
 
    atime @3 :UInt64;
@@ -50,7 +50,7 @@ struct Cred {
 }
 
 struct Error {
-   errno @0 :UInt32;
+   errorCode @0 :UInt32;
 }
 
 struct SetAttrFlags {
@@ -78,7 +78,7 @@ struct OpenFlags {
 }
 
 interface Node {
-   lookup @0 (cred :Cred, name :Text) -> (error :Error, node :Node, stat :Stat);
+   lookup @0 (cred :Cred, name :Text) -> (error :Error, node :Node, stat :Attrs);
 
    getAttr @1 (cred :Cred) -> (error :Error, attrs :Attrs);
 
@@ -91,8 +91,8 @@ interface Node {
    # Open a file.
    open @11 (cred :Cred, openFlags :OpenFlags) -> (error :Error, handle :FileHandle);
 
-   # Open a directory. The file should contain dirent stream in the same format as FUSE.
-   opendir @12 (cred :Cred) -> (error :Error, handle :FileHandle);
+   # Read a directory.
+   readdir @12 (cred :Cred) -> (error :Error, entries :List(DirEntry));
 
    # methods changing the filesystem:
 
@@ -129,10 +129,16 @@ interface Node {
 }
 
 interface FileHandle {
-   read @0 () -> (data :Data);
-   write @1 ();
-   fsync @2 ();
-   flush @3 ();
+   read @0 (cred :Cred, offset :UInt64, size :UInt64) -> (error :Error, data :Data);
+   write @1 (cred :Cred, offset :UInt64, data :Data) -> (error :Error);
+   fsync @2 (cred :Cred) -> (error :Error);
+   flush @3 (cred :Cred) -> (error :Error);
 
    #release @15 ();
+}
+
+struct DirEntry {
+   name @0 :Text;
+
+   kind @1 :UInt8;
 }
