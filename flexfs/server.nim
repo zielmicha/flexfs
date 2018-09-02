@@ -1,4 +1,4 @@
-import flexfs/schema, morelinux/fd, posix, reactor/threading, reactor, capnp, caprpc, os, strutils, reactor/syscall
+import flexfs/schema, morelinux/fd, posix, reactor/threading, reactor, capnp, capnp/rpc, os, strutils, reactor/syscall
 
 type
   Options = ref object
@@ -61,6 +61,7 @@ var O_CLOEXEC {.importc, header: "<fcntl.h>"}: cint
 var O_NOFOLLOW {.importc, header: "<fcntl.h>"}: cint
 var O_PATH {.importc, header: "<fcntl.h>"}: cint
 var O_NOATIME {.importc, header: "<fcntl.h>".}: cint
+var O_DIRECTORY {.importc, header: "<fcntl.h>".}: cint
 
 proc osError(): ref OSError =
   let errCode = osLastError()
@@ -71,14 +72,17 @@ proc osError(): ref OSError =
 proc doLookup(root: cint, path: string): Result[cint] =
   let parts = splitPath(path)
 
-  var currFd: cint = dupCloexec(root)
-  for part in parts:
-    let newFd = retrySyscall(openat(currFd, part, O_PATH or O_NOFOLLOW or O_CLOEXEC, 0o400))
-    discard close(currFd)
-    if newFd < 0:
-      return error(cint, osError())
+  doAssert root >= 0
 
-    currFd = newFd
+  var currFd: cint = dupCloexec(root)
+  doAssert currFd >= 0
+  for part in parts:
+    let newFd = catchError(retrySyscall(openat(currFd, part, O_PATH or O_NOFOLLOW or O_CLOEXEC, 0o400)))
+    if newFd.isError: return newFd
+    discard close(currFd)
+    currFd = newFd.get
+    if currFd < 0:
+      return error(cint, osError())
 
   return just(currFd)
 
@@ -121,6 +125,7 @@ proc lookup(self: NodeImpl, cred: Cred, name: string): Future[Node_lookup_Result
   let res = tryAwait run(self.options, cred,
                          proc(): Result[tuple[fd: cint, stat: Attrs]] =
                            let ret = doLookup(origFd, name)
+                           echo "lookup ret ", ret
                            if ret.isError:
                              return error(tuple[fd: cint, stat: Attrs], ret.error)
                            let fd = ret.get
@@ -214,8 +219,36 @@ proc open(self: NodeImpl, cred: Cred, openFlags: OpenFlags): Future[Node_open_Re
   if res.isError: return Node_open_Result(error: makeError(res.error))
   return Node_open_Result(handle: FileHandleImpl(fd: wrapFd(res.get)))
 
+proc fdopendir(fd: int): ptr DIR {.importc, header: "<dirent.h>".}
+
+proc listDir(fd: cint): Result[seq[DirEntry]] =
+  var d = opendir("/proc/self/fd/" & $fd)
+  if d == nil:
+    return error(seq[DirEntry], osError())
+
+  defer: discard closedir(d)
+
+  var entries: seq[DirEntry] = @[]
+  while true:
+    let ent = readdir(d)
+    if ent == nil:
+      break
+    let name = $(cstring(addr ent.d_name))
+
+    if name == "." or name == "..":
+      continue
+
+    entries.add(DirEntry(name: name, kind: ent.d_type.uint8))
+
+  return just(entries)
+
 proc readdir(self: NodeImpl, cred: Cred): Future[Node_readdir_Result] {.async.} =
-  discard
+  let origFd = self.fd.get
+  let res = tryAwait run(self.options, cred, () => listDir(origFd))
+
+  if res.isError: return Node_readdir_Result(error: makeError(res.error))
+
+  return Node_readdir_Result(entries: res.get)
 
 proc statfs(self: NodeImpl, cred: Cred): Future[Node_statfs_Result] {.async.} =
   discard
@@ -250,6 +283,12 @@ proc fsync(self: FileHandleImpl, cred: Cred): Future[Error] {.async.} =
 proc flush(self: FileHandleImpl, cred: Cred): Future[Error] {.async.} =
   if self.options.readonly: return readonlyError()
 
-
 capServerImpl(NodeImpl, [Node])
 capServerImpl(FileHandleImpl, [schema.FileHandle])
+
+proc makeNode*(path: string, options=Options(root: false, readonly: false)): Future[Node] {.async.} =
+  echo "node: ", path
+  let fd = retrySyscall(open(path, O_PATH or O_NOFOLLOW or O_CLOEXEC, 0o400))
+  if fd < 0:
+    raise osError()
+  return NodeImpl(options: options, fd: wrapFd(fd)).asNode

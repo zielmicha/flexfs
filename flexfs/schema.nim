@@ -1,6 +1,6 @@
 import capnp, capnp/gensupport, collections/iface
 
-import reactor, caprpc, caprpc/rpcgensupport
+import reactor, capnp/rpc, capnp/rpc/rpcgensupport
 # file: flexfs.capnp
 
 type
@@ -379,7 +379,7 @@ template forwardDecl*(iftype: typedesc[Node], self, impltype): untyped {.dirty.}
 
 miscCapMethods(Node, Node_CallWrapper)
 
-proc capCall*[T: Node](cap: T, id: uint64, args: AnyPointer): Future[AnyPointer] =
+proc capCall*[](cap: Node, id: uint64, args: AnyPointer): Future[AnyPointer] =
   case int(id):
     of 0:
       let argObj = args.castAs(Node_lookup_Params)
@@ -465,102 +465,102 @@ proc capCall*[T: Node](cap: T, id: uint64, args: AnyPointer): Future[AnyPointer]
 
 proc getMethodId*(t: typedesc[Node_lookup_Params]): uint64 = 0'u64
 
-proc lookup*[T: Node_CallWrapper](self: T, cred: Cred, name: string): Future[Node_lookup_Result] =
+proc lookup*[](self: Node_CallWrapper, cred: Cred, name: string): Future[Node_lookup_Result] =
   return self.cap.call(17595006542357360554'u64, 0, toAnyPointer(Node_lookup_Params(cred: cred, name: name))).castAs(Node_lookup_Result)
 
 proc getMethodId*(t: typedesc[Node_getAttr_Params]): uint64 = 1'u64
 
-proc getAttr*[T: Node_CallWrapper](self: T, cred: Cred): Future[Node_getAttr_Result] =
+proc getAttr*[](self: Node_CallWrapper, cred: Cred): Future[Node_getAttr_Result] =
   return self.cap.call(17595006542357360554'u64, 1, toAnyPointer(Node_getAttr_Params(cred: cred))).castAs(Node_getAttr_Result)
 
 proc getMethodId*(t: typedesc[Node_setAttr_Params]): uint64 = 2'u64
 
-proc setAttr*[T: Node_CallWrapper](self: T, cred: Cred, flags: SetAttrFlags, attr: Attrs): Future[Error] =
+proc setAttr*[](self: Node_CallWrapper, cred: Cred, flags: SetAttrFlags, attr: Attrs): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 2, toAnyPointer(Node_setAttr_Params(cred: cred, flags: flags, attr: attr))).castAs(Node_setAttr_Result), error)
 
 proc getMethodId*(t: typedesc[Node_readlink_Params]): uint64 = 3'u64
 
-proc readlink*[T: Node_CallWrapper](self: T, cred: Cred): Future[Node_readlink_Result] =
+proc readlink*[](self: Node_CallWrapper, cred: Cred): Future[Node_readlink_Result] =
   return self.cap.call(17595006542357360554'u64, 3, toAnyPointer(Node_readlink_Params(cred: cred))).castAs(Node_readlink_Result)
 
 proc getMethodId*(t: typedesc[Node_symlink_Params]): uint64 = 4'u64
 
-proc symlink*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc symlink*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 4, toAnyPointer(Node_symlink_Params(cred: cred))).castAs(Node_symlink_Result), error)
 
 proc getMethodId*(t: typedesc[Node_mknod_Params]): uint64 = 5'u64
 
-proc mknod*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc mknod*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 5, toAnyPointer(Node_mknod_Params(cred: cred))).castAs(Node_mknod_Result), error)
 
 proc getMethodId*(t: typedesc[Node_mkdir_Params]): uint64 = 6'u64
 
-proc mkdir*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc mkdir*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 6, toAnyPointer(Node_mkdir_Params(cred: cred))).castAs(Node_mkdir_Result), error)
 
 proc getMethodId*(t: typedesc[Node_unlink_Params]): uint64 = 7'u64
 
-proc unlink*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc unlink*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 7, toAnyPointer(Node_unlink_Params(cred: cred))).castAs(Node_unlink_Result), error)
 
 proc getMethodId*(t: typedesc[Node_rmdir_Params]): uint64 = 8'u64
 
-proc rmdir*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc rmdir*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 8, toAnyPointer(Node_rmdir_Params(cred: cred))).castAs(Node_rmdir_Result), error)
 
 proc getMethodId*(t: typedesc[Node_rename_Params]): uint64 = 9'u64
 
-proc rename*[T: Node_CallWrapper](self: T, cred: Cred, targetDir: Node, newName: string): Future[Error] =
+proc rename*[](self: Node_CallWrapper, cred: Cred, targetDir: Node, newName: string): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 9, toAnyPointer(Node_rename_Params(cred: cred, targetDir: targetDir, newName: newName))).castAs(Node_rename_Result), error)
 
 proc getMethodId*(t: typedesc[Node_link_Params]): uint64 = 10'u64
 
-proc link*[T: Node_CallWrapper](self: T, cred: Cred, targetDir: Node, newName: string): Future[Error] =
+proc link*[](self: Node_CallWrapper, cred: Cred, targetDir: Node, newName: string): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 10, toAnyPointer(Node_link_Params(cred: cred, targetDir: targetDir, newName: newName))).castAs(Node_link_Result), error)
 
 proc getMethodId*(t: typedesc[Node_open_Params]): uint64 = 11'u64
 
-proc open*[T: Node_CallWrapper](self: T, cred: Cred, openFlags: OpenFlags): Future[Node_open_Result] =
+proc open*[](self: Node_CallWrapper, cred: Cred, openFlags: OpenFlags): Future[Node_open_Result] =
   return self.cap.call(17595006542357360554'u64, 11, toAnyPointer(Node_open_Params(cred: cred, openFlags: openFlags))).castAs(Node_open_Result)
 
 proc getMethodId*(t: typedesc[Node_readdir_Params]): uint64 = 12'u64
 
-proc readdir*[T: Node_CallWrapper](self: T, cred: Cred): Future[Node_readdir_Result] =
+proc readdir*[](self: Node_CallWrapper, cred: Cred): Future[Node_readdir_Result] =
   return self.cap.call(17595006542357360554'u64, 12, toAnyPointer(Node_readdir_Params(cred: cred))).castAs(Node_readdir_Result)
 
 proc getMethodId*(t: typedesc[Node_statfs_Params]): uint64 = 13'u64
 
-proc statfs*[T: Node_CallWrapper](self: T, cred: Cred): Future[Node_statfs_Result] =
+proc statfs*[](self: Node_CallWrapper, cred: Cred): Future[Node_statfs_Result] =
   return self.cap.call(17595006542357360554'u64, 13, toAnyPointer(Node_statfs_Params(cred: cred))).castAs(Node_statfs_Result)
 
 proc getMethodId*(t: typedesc[Node_setxattr_Params]): uint64 = 14'u64
 
-proc setxattr*[T: Node_CallWrapper](self: T, ): Future[Error] =
+proc setxattr*[](self: Node_CallWrapper, ): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 14, toAnyPointer(Node_setxattr_Params())).castAs(Node_setxattr_Result), error)
 
 proc getMethodId*(t: typedesc[Node_getxattr_Params]): uint64 = 15'u64
 
-proc getxattr*[T: Node_CallWrapper](self: T, ): Future[Error] =
+proc getxattr*[](self: Node_CallWrapper, ): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 15, toAnyPointer(Node_getxattr_Params())).castAs(Node_getxattr_Result), error)
 
 proc getMethodId*(t: typedesc[Node_listxattr_Params]): uint64 = 16'u64
 
-proc listxattr*[T: Node_CallWrapper](self: T, ): Future[Error] =
+proc listxattr*[](self: Node_CallWrapper, ): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 16, toAnyPointer(Node_listxattr_Params())).castAs(Node_listxattr_Result), error)
 
 proc getMethodId*(t: typedesc[Node_removexattr_Params]): uint64 = 17'u64
 
-proc removexattr*[T: Node_CallWrapper](self: T, ): Future[Error] =
+proc removexattr*[](self: Node_CallWrapper, ): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 17, toAnyPointer(Node_removexattr_Params())).castAs(Node_removexattr_Result), error)
 
 proc getMethodId*(t: typedesc[Node_access_Params]): uint64 = 18'u64
 
-proc access*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc access*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 18, toAnyPointer(Node_access_Params(cred: cred))).castAs(Node_access_Result), error)
 
 proc getMethodId*(t: typedesc[Node_create_Params]): uint64 = 19'u64
 
-proc create*[T: Node_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc create*[](self: Node_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(17595006542357360554'u64, 19, toAnyPointer(Node_create_Params(cred: cred))).castAs(Node_create_Result), error)
 
 makeStructCoders(Node_lookup_Params, [], [
@@ -756,7 +756,7 @@ template forwardDecl*(iftype: typedesc[FileHandle], self, impltype): untyped {.d
 
 miscCapMethods(FileHandle, FileHandle_CallWrapper)
 
-proc capCall*[T: FileHandle](cap: T, id: uint64, args: AnyPointer): Future[AnyPointer] =
+proc capCall*[](cap: FileHandle, id: uint64, args: AnyPointer): Future[AnyPointer] =
   case int(id):
     of 0:
       let argObj = args.castAs(FileHandle_read_Params)
@@ -778,22 +778,22 @@ proc capCall*[T: FileHandle](cap: T, id: uint64, args: AnyPointer): Future[AnyPo
 
 proc getMethodId*(t: typedesc[FileHandle_read_Params]): uint64 = 0'u64
 
-proc read*[T: FileHandle_CallWrapper](self: T, cred: Cred, offset: uint64, size: uint64): Future[FileHandle_read_Result] =
+proc read*[](self: FileHandle_CallWrapper, cred: Cred, offset: uint64, size: uint64): Future[FileHandle_read_Result] =
   return self.cap.call(14767779304721956413'u64, 0, toAnyPointer(FileHandle_read_Params(cred: cred, offset: offset, size: size))).castAs(FileHandle_read_Result)
 
 proc getMethodId*(t: typedesc[FileHandle_write_Params]): uint64 = 1'u64
 
-proc write*[T: FileHandle_CallWrapper](self: T, cred: Cred, offset: uint64, data: string): Future[Error] =
+proc write*[](self: FileHandle_CallWrapper, cred: Cred, offset: uint64, data: string): Future[Error] =
   return getFutureField(self.cap.call(14767779304721956413'u64, 1, toAnyPointer(FileHandle_write_Params(cred: cred, offset: offset, data: data))).castAs(FileHandle_write_Result), error)
 
 proc getMethodId*(t: typedesc[FileHandle_fsync_Params]): uint64 = 2'u64
 
-proc fsync*[T: FileHandle_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc fsync*[](self: FileHandle_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(14767779304721956413'u64, 2, toAnyPointer(FileHandle_fsync_Params(cred: cred))).castAs(FileHandle_fsync_Result), error)
 
 proc getMethodId*(t: typedesc[FileHandle_flush_Params]): uint64 = 3'u64
 
-proc flush*[T: FileHandle_CallWrapper](self: T, cred: Cred): Future[Error] =
+proc flush*[](self: FileHandle_CallWrapper, cred: Cred): Future[Error] =
   return getFutureField(self.cap.call(14767779304721956413'u64, 3, toAnyPointer(FileHandle_flush_Params(cred: cred))).castAs(FileHandle_flush_Result), error)
 
 makeStructCoders(FileHandle_read_Params, [
